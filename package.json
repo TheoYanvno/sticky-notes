@@ -40,7 +40,7 @@
         }
       ],
       "icon": "build/icon.png",
-      "artifactName": "Sticky-Notes-Setup-${version}.${ext}"
+      "artifactName": "Sticky-Notes-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

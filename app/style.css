@@ -58,6 +58,8 @@ kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-
 .actions button, .task-form button, .task-form input, .task-form select {
   padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
 }
+.get-app { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.get-app:hover { background: var(--accent); color: var(--accent-ink); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .actions button:hover:not(.primary) { background: var(--paper); }
 
@@ -148,7 +150,7 @@ body.pin-window { background: none; }
 @media (max-width: 700px) {
   .topbar { gap: 8px; }
   .actions { margin-inline-start: 0; width: 100%; }
-  .actions button { flex: 1; }
+  .actions button, .get-app { flex: 1; text-align: center; }
   .task { grid-template-columns: auto 1fr; }
   .task-edit { grid-column: 1 / -1; flex-wrap: wrap; }
 }

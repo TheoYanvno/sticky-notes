@@ -298,6 +298,7 @@ function renderAll() {
 state.data = await store.load();
 document.body.classList.toggle('desktop', store.desktop);
 $('#notifyBtn').hidden = store.desktop || !('Notification' in window) || Notification.permission !== 'default';
+$('#getApp').hidden = !!store.desktop;
 let savedView = 'board';
 try { savedView = localStorage.getItem('sticky-notes-view') === 'tasks' ? 'tasks' : 'board'; } catch { /* default */ }
 renderAll();

@@ -1,6 +1,6 @@
 # Sticky Notes
 
-**▶ [Try it in your browser](https://theoyanvno.github.io/sticky-notes/app/)** · **⬇ Windows installer:** built by GitHub Actions, see [Download](#download)
+**⬇ [Download for Windows](https://github.com/TheoYanvno/sticky-notes/releases/latest/download/Sticky-Notes-Setup.exe)** · **▶ [Try it in your browser](https://theoyanvno.github.io/sticky-notes/app/)**
 
 A Windows desktop app for sticky notes and tasks. Put colored notes anywhere on a board, turn them into checklists, pin one on top of every other window, and keep a task list with due dates, priorities and reminders.
 
@@ -32,7 +32,9 @@ A Windows desktop app for sticky notes and tasks. Put colored notes anywhere on 
 
 ## Download
 
-Every push to `main` builds the Windows installer on GitHub Actions. Open the latest run under **Actions → Build Windows installer** and download **Sticky-Notes-Setup** from its artifacts. Tagged versions (`v1.0.0`) also get it attached to a GitHub release.
+**[Download Sticky-Notes-Setup.exe](https://github.com/TheoYanvno/sticky-notes/releases/latest/download/Sticky-Notes-Setup.exe)**, run it, and pick where to install. The link always points at the newest release.
+
+The installer is built by GitHub Actions: every push to `main` builds and tests it, and each version tag (`v1.0.0`) publishes it to [Releases](https://github.com/TheoYanvno/sticky-notes/releases).
 
 The installer isn't code-signed, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
 
