@@ -34,7 +34,7 @@ A Windows desktop app for sticky notes and tasks. Put colored notes anywhere on 
 
 **[Download Sticky-Notes-Setup.exe](https://github.com/TheoYanvno/sticky-notes/releases/latest/download/Sticky-Notes-Setup.exe)**, run it, and pick where to install. The link always points at the newest release.
 
-The installer is built by GitHub Actions: every push to `main` builds and tests it, and each version tag (`v1.0.0`) publishes it to [Releases](https://github.com/TheoYanvno/sticky-notes/releases).
+The installer is built by GitHub Actions: every push to `main` builds and tests it, and publishes it to [Releases](https://github.com/TheoYanvno/sticky-notes/releases).
 
 The installer isn't code-signed, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
 
