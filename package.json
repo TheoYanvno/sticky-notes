@@ -1,7 +1,7 @@
 {
   "name": "sticky-notes",
-  "version": "1.0.0",
-  "description": "Sticky notes and a task tracker for the Windows desktop: colors, checklists, search, always-on-top pinned notes, reminders.",
+  "version": "2.0.0",
+  "description": "Simple sticky notes for the Windows desktop: four colors, an optional checklist, up to three notes that stay on screen until you delete them.",
   "type": "module",
   "main": "main.js",
   "scripts": {
