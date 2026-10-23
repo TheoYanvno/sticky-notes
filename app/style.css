@@ -68,12 +68,12 @@ button { cursor: pointer; }
 .item-text { padding: 2px 0; }
 .add-item input { padding: 4px 0 4px 23px; font-size: 14px; }
 
-/* ── Desktop: the window is the note ───────────────────────── */
-body.note-window { background: var(--yellow); overflow: hidden; }
-body.note-window[data-color="pink"] { background: var(--pink); }
-body.note-window[data-color="blue"] { background: var(--blue); }
-body.note-window[data-color="green"] { background: var(--green); }
-.note-window #note, .note-window .note { height: 100%; }
+/* ── Desktop: just the note on the desktop (the window around it is see-through) ── */
+body.note-window { background: transparent; overflow: hidden; }
+.note-window #note { height: 100%; padding: 10px; }
+.note-window .note { height: 100%; position: relative; border-radius: 4px 4px 16px 4px; box-shadow: 0 2px 4px rgba(0, 0, 0, .18), 0 6px 10px rgba(0, 0, 0, .14); }
+.grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 0 55%, rgba(0, 0, 0, .22) 55% 62%, transparent 62% 72%, rgba(0, 0, 0, .22) 72% 79%, transparent 79%); }
 .note-window .note-bar { -webkit-app-region: drag; cursor: move; }
 .note-window .note-bar button { -webkit-app-region: no-drag; }
 
