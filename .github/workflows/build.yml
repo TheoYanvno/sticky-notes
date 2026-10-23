@@ -45,11 +45,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          # One release per version in package.json; later pushes of the same version replace the installer,
-          # so releases/latest/download/Sticky-Notes-Setup.exe always serves the newest build.
+          # One release per version in package.json. A version that's already released is left alone, so
+          # work in progress never replaces the installer people download; bump the version to publish.
           tag="v$(node -p "require('./package.json').version")"
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" dist/Sticky-Notes-Setup.exe --clobber
+            echo "$tag is already released; not replacing it"
           else
-            gh release create "$tag" dist/Sticky-Notes-Setup.exe --target "$GITHUB_SHA" --title "Sticky Notes $tag" --notes "Windows installer: download **Sticky-Notes-Setup.exe**, run it and pick where to install. The installer isn't code-signed yet, so Windows SmartScreen may ask you to confirm: choose **More info → Run anyway**."
+            gh release create "$tag" dist/Sticky-Notes-Setup.exe --target "$GITHUB_SHA" --title "Sticky Notes $tag" --notes-file .github/release-notes.md
           fi
