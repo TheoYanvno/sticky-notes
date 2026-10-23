@@ -20,8 +20,13 @@ async function untilLoaded(win) {
   for (let i = 0; i < 50 && (win.webContents.isLoading() || !(await run(win, '!!document.querySelector(".note")'))); i++) await wait(100);
 }
 
-await import('../../main.js');
-await app.whenReady();
+// Electron only fires "ready" once this file has finished loading, so nothing here may wait at the top level
+import '../../main.js';
+
+// Never hang a build: give up after two minutes
+setTimeout(() => fail('timed out'), 120_000).unref?.();
+
+app.whenReady().then(async () => {
 try {
   await wait(1500);
   check(notes().length === 1, 'a fresh start shows one empty note');
@@ -70,3 +75,4 @@ try {
 } catch (e) {
   fail(e.message);
 }
+});
