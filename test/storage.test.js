@@ -3,47 +3,46 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { emptyData, normalize, serialize, parseImport, mergeImport, writeAtomic, loadFile } from '../src/storage.js';
+import { emptyData, normalize, serialize, writeAtomic, loadFile } from '../src/storage.js';
 
-const note = (id, extra = {}) => ({ id, title: 'T', body: 'B', checklist: [], color: 'blue', x: 10, y: 20, w: 240, h: 220, created: '2026-10-01T10:00:00.000Z', updated: '2026-10-01T10:00:00.000Z', ...extra });
-const task = (id, extra = {}) => ({ id, title: 'Do it', due: '2026-10-22', dueTime: '09:30', priority: 'high', done: false, created: '2026-10-01T10:00:00.000Z', updated: '2026-10-01T10:00:00.000Z', ...extra });
+const note = (id, extra = {}) => ({ id, body: 'B', list: false, checklist: [], color: 'blue', x: 10, y: 20, w: 260, h: 260, created: '2026-10-01T10:00:00.000Z', updated: '2026-10-01T10:00:00.000Z', ...extra });
 
 test('normalize repairs or drops bad records', () => {
   const data = normalize({
-    notes: [note('a', { color: 'neon', w: 5, x: -50 }), { title: 'no id' }, note('a'), null, note('b', { checklist: [{ id: 'i1', text: 'x', done: 1 }, { text: 'no id' }] })],
-    tasks: [task('t1', { priority: 'urgent', dueTime: '25:00' }), task('t2', { title: '   ' }), task('t3', { due: 'tomorrow' })],
+    notes: [note('a', { color: 'neon', w: 5, x: -50 }), { body: 'no id' }, note('a'), null, note('b', { checklist: [{ id: 'i1', text: 'x', done: 1 }, { text: 'no id' }] })],
   });
   assert.equal(data.notes.length, 2, 'duplicate id, missing id and null dropped');
   assert.equal(data.notes[0].color, 'yellow');
-  assert.equal(data.notes[0].w, 160);
-  assert.equal(data.notes[0].x, 0);
+  assert.equal(data.notes[0].w, 200, 'too small: raised to the minimum');
+  assert.equal(data.notes[0].x, -50, 'a screen to the left of the main one has negative positions');
   assert.deepEqual(data.notes[1].checklist, [{ id: 'i1', text: 'x', done: false }]);
-  assert.deepEqual(data.tasks.map((t) => t.id), ['t1', 't3']);
-  assert.equal(data.tasks[0].priority, 'medium');
-  assert.equal(data.tasks[0].dueTime, null);
-  assert.equal(data.tasks[1].due, null);
   assert.deepEqual(normalize('garbage'), emptyData());
 });
 
-test('export round-trips through import', () => {
-  const data = normalize({ notes: [note('a')], tasks: [task('t1')] });
-  assert.deepEqual(parseImport(serialize(data)), data);
+test('only three notes are kept: the three edited most recently', () => {
+  const data = normalize({ notes: ['a', 'b', 'c', 'd', 'e'].map((id, i) => note(id, { updated: `2026-10-0${[3, 9, 1, 7, 5][i]}T00:00:00.000Z` })) });
+  assert.deepEqual(data.notes.map((n) => n.id), ['b', 'd', 'e'], 'kept in their original order');
 });
 
-test('import rejects files that are not exports', () => {
-  assert.throws(() => parseImport('{oops'), /not valid JSON/);
-  assert.throws(() => parseImport('{"notes":[]}'), /not a Sticky Notes export/);
+test('version 1 files carry over: titles become the first line, removed colors map to the nearest', () => {
+  const v1 = {
+    app: 'sticky-notes', version: 1, tasks: [{ id: 't1', title: 'old task' }],
+    notes: [
+      { ...note('a', { color: 'purple' }), title: 'Groceries', body: '', checklist: [{ id: 'i1', text: 'Milk', done: true }] },
+      { ...note('b', { color: 'orange' }), title: 'Idea', body: 'Write it down' },
+    ],
+  };
+  delete v1.notes[0].list; delete v1.notes[1].list;
+  const data = normalize(v1);
+  assert.equal(data.version, 2);
+  assert.equal('tasks' in data, false, 'tasks are gone in version 2');
+  assert.deepEqual(data.notes.map((n) => [n.body, n.color, n.list]), [['Groceries', 'blue', false], ['Idea\nWrite it down', 'yellow', false]]);
+  assert.equal(data.notes[0].checklist[0].text, 'Milk');
 });
 
-test('merging an import keeps the newest copy of each note', () => {
-  const current = { notes: [note('a', { title: 'mine', updated: '2026-10-05T00:00:00.000Z' }), note('b')], tasks: [] };
-  const incoming = { notes: [note('a', { title: 'older', updated: '2026-10-02T00:00:00.000Z' }), note('c')], tasks: [task('t1')] };
-  const merged = mergeImport(current, incoming);
-  assert.deepEqual(merged.notes.map((n) => n.id).sort(), ['a', 'b', 'c']);
-  assert.equal(merged.notes.find((n) => n.id === 'a').title, 'mine');
-  assert.equal(merged.tasks.length, 1);
-  const newer = mergeImport(current, { notes: [note('a', { title: 'newer', updated: '2026-10-09T00:00:00.000Z' })], tasks: [] });
-  assert.equal(newer.notes.find((n) => n.id === 'a').title, 'newer');
+test('a saved file round-trips unchanged', () => {
+  const data = normalize({ notes: [note('a'), note('b', { list: true, checklist: [{ id: 'i1', text: 'x', done: true }] })] });
+  assert.deepEqual(normalize(JSON.parse(serialize(data))), data);
 });
 
 test('atomic writes keep a backup and recover from a damaged file', async () => {
@@ -51,8 +50,8 @@ test('atomic writes keep a backup and recover from a damaged file', async () => 
   const file = path.join(dir, 'data.json');
   assert.deepEqual(await loadFile(fs, file), emptyData(), 'no file yet: fresh start');
 
-  await writeAtomic(fs, file, serialize({ notes: [note('a')], tasks: [] }));
-  await writeAtomic(fs, file, serialize({ notes: [note('a'), note('b')], tasks: [] }));
+  await writeAtomic(fs, file, serialize({ notes: [note('a')] }));
+  await writeAtomic(fs, file, serialize({ notes: [note('a'), note('b')] }));
   assert.equal((await loadFile(fs, file)).notes.length, 2);
   assert.equal(JSON.parse(await fs.readFile(`${file}.bak`, 'utf8')).notes.length, 1, '.bak is the previous version');
   assert.deepEqual((await fs.readdir(dir)).filter((f) => f.endsWith('.tmp')), [], 'no temporary files left');

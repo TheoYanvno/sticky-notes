@@ -1,38 +1,57 @@
-// Sticky notes: plain objects, changed only through these functions so the board, the pinned windows
-// and the tests all agree on the rules.
+// Sticky notes: plain objects, changed only through these functions so the desktop windows, the browser
+// demo and the tests all follow the same rules.
+//
+// A note is just a note: four colors, free text or a checklist, no title. At most three exist at a time.
 
-export const COLORS = ['yellow', 'pink', 'blue', 'green', 'purple', 'orange'];
-export const SIZE = { w: 240, h: 220, minW: 160, minH: 120 };
+export const COLORS = ['yellow', 'pink', 'blue', 'green'];
+export const MAX_NOTES = 3;
+export const SIZE = { w: 260, h: 260, minW: 200, minH: 160 };
 
 export const uid = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
 const stamp = (now) => (now ?? new Date()).toISOString();
 
-/** Where the next note goes: cascade down and right from the last one, wrapping back to the top. */
-export function nextPosition(notes, area = { width: 1200, height: 800 }) {
-  const step = 32;
-  const last = notes.at(-1);
-  let x = last ? last.x + step : 40;
-  let y = last ? last.y + step : 40;
-  if (x + SIZE.w > area.width) x = 40;
-  if (y + SIZE.h > area.height) y = 40;
-  return { x, y };
+export const canAdd = (notes) => notes.length < MAX_NOTES;
+
+/** The first color no other note is using, so three notes are easy to tell apart. */
+export function freeColor(notes) {
+  return COLORS.find((c) => !notes.some((n) => n.color === c)) ?? COLORS[0];
 }
 
-export function createNote(notes, { title = '', body = '', color, area, now } = {}) {
-  const at = nextPosition(notes, area);
+/**
+ * Where a new note goes. Next to the note the + was pressed on (to its right, or below if there's no room),
+ * otherwise cascading from the top-left. `area` is the visible space: the screen or the browser window.
+ */
+export function nextPosition(notes, { from, area = { x: 0, y: 0, width: 1200, height: 800 } } = {}) {
+  const gap = 24;
+  const fits = (x, y) => x >= area.x && y >= area.y && x + SIZE.w <= area.x + area.width && y + SIZE.h <= area.y + area.height;
+  const free = (x, y) => !notes.some((n) => Math.abs(n.x - x) < 40 && Math.abs(n.y - y) < 40);
+  if (from) {
+    const tries = [[from.x + from.w + gap, from.y], [from.x, from.y + from.h + gap], [from.x - SIZE.w - gap, from.y], [from.x + 40, from.y + 40]];
+    for (const [x, y] of tries) if (fits(x, y) && free(x, y)) return { x, y };
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = area.x + 40 + i * 36; const y = area.y + 40 + i * 36;
+    if (fits(x, y) && free(x, y)) return { x, y };
+  }
+  return { x: area.x + 40, y: area.y + 40 };
+}
+
+/** A new empty note, or null when three notes already exist. */
+export function createNote(notes, { color, from, area, now } = {}) {
+  if (!canAdd(notes)) return null;
   const t = stamp(now);
   return {
-    id: uid(), title, body, checklist: [],
-    color: COLORS.includes(color) ? color : COLORS[notes.length % COLORS.length],
-    ...at, w: SIZE.w, h: SIZE.h, created: t, updated: t,
+    id: uid(), body: '', list: false, checklist: [],
+    color: COLORS.includes(color) ? color : freeColor(notes),
+    ...nextPosition(notes, { from, area }), w: SIZE.w, h: SIZE.h, created: t, updated: t,
   };
 }
 
-/** Returns a changed copy. Size and position are kept inside sensible limits. */
+/** Returns a changed copy. Size and position are kept at usable values. */
 export function updateNote(note, patch, now) {
   const next = { ...note, ...patch, updated: stamp(now) };
-  next.x = Math.max(0, Math.round(next.x));
-  next.y = Math.max(0, Math.round(next.y));
+  next.x = Math.round(next.x);
+  next.y = Math.round(next.y);
   next.w = Math.max(SIZE.minW, Math.round(next.w));
   next.h = Math.max(SIZE.minH, Math.round(next.h));
   if (!COLORS.includes(next.color)) next.color = note.color;
@@ -48,7 +67,23 @@ export function toFront(notes, id) {
   return note ? [...remove(notes, id), note] : notes;
 }
 
-// Checklists
+/**
+ * Turns the checklist on or off. Nothing typed is lost: each line of text becomes a checklist item,
+ * and turning the checklist off writes the items back as lines.
+ */
+export function setList(note, on, now) {
+  if (on === note.list) return note;
+  if (on) {
+    const lines = note.body.split('\n').map((l) => l.trim()).filter(Boolean);
+    const items = [...note.checklist, ...lines.map((text) => ({ id: uid(), text, done: false }))];
+    return updateNote(note, { list: true, checklist: items, body: '' }, now);
+  }
+  const text = note.checklist.map((i) => i.text).filter((t) => t.trim()).join('\n');
+  const body = [note.body.trim(), text].filter(Boolean).join('\n');
+  return updateNote(note, { list: false, checklist: [], body }, now);
+}
+
+// Checklist items
 export function addItem(note, text, now) {
   const clean = text.trim();
   if (!clean) return note;
@@ -60,7 +95,6 @@ export const editItem = (note, itemId, text, now) =>
   updateNote(note, { checklist: note.checklist.map((i) => (i.id === itemId ? { ...i, text } : i)) }, now);
 export const removeItem = (note, itemId, now) =>
   updateNote(note, { checklist: note.checklist.filter((i) => i.id !== itemId) }, now);
-export const clearDone = (note, now) => updateNote(note, { checklist: note.checklist.filter((i) => !i.done) }, now);
 
 export function progress(note) {
   const total = note.checklist.length;
@@ -68,21 +102,11 @@ export function progress(note) {
   return { done, total, label: total ? `${done}/${total}` : '' };
 }
 
-/** Lower-case, accents removed, so "cafe" finds "Café". */
-export const fold = (s) => String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+/** True when the note has nothing in it, so deleting it needs no second click. */
+export const isEmpty = (note) => !note.body.trim() && !note.checklist.some((i) => i.text.trim());
 
-/** Every word of the query must appear somewhere in the note (title, text or checklist). */
-export function matches(note, query) {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const hay = fold([note.title, note.body, ...note.checklist.map((i) => i.text)].join('\n'));
-  return words.every((w) => hay.includes(w));
-}
-
-export const search = (notes, query) => notes.filter((n) => matches(n, query));
-
-/** A short label for the window title of a pinned note. */
+/** A short name for the note's window (shown in the taskbar and Alt+Tab). */
 export function label(note) {
-  const first = note.title.trim() || note.body.trim().split('\n')[0] || note.checklist[0]?.text || 'Note';
+  const first = note.body.trim().split('\n')[0] || note.checklist.find((i) => i.text.trim())?.text || 'Sticky note';
   return first.length > 40 ? `${first.slice(0, 39)}…` : first;
 }

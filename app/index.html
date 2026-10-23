@@ -5,55 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Sticky Notes</title>
-  <meta name="description" content="Sticky notes and a task tracker: colors, checklists, search, due dates and reminders.">
+  <meta name="description" content="Simple sticky notes: four colors, an optional checklist, up to three notes that stay put until you delete them.">
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand"><img src="icon.png" alt="" width="28" height="28"> Sticky Notes</div>
-    <nav class="tabs" role="tablist" aria-label="Views">
-      <button role="tab" data-view="board" aria-selected="true" aria-controls="boardView">Notes <span id="noteCount" class="count"></span></button>
-      <button role="tab" data-view="tasks" aria-selected="false" aria-controls="tasksView" tabindex="-1">Tasks <span id="taskBadge" class="badge" hidden></span></button>
-    </nav>
-    <label class="search"><span class="visually-hidden">Search</span>
-      <input id="search" type="search" placeholder="Search notes" autocomplete="off">
-    </label>
-    <div class="actions">
-      <button id="newNote" class="primary" type="button" title="New note (N, or Ctrl+Shift+N anywhere in the desktop app)">+ New note</button>
-      <button id="notifyBtn" type="button" hidden title="Let the browser show reminders when a task is due">🔔 Reminders</button>
-      <button id="importBtn" type="button" title="Add notes and tasks from an export file">Import</button>
-      <button id="exportBtn" type="button" title="Save all notes and tasks to a file">Export</button>
-      <a id="getApp" class="get-app" href="https://github.com/TheoYanvno/sticky-notes/releases/latest/download/Sticky-Notes-Setup.exe" hidden>⬇ Get the Windows app</a>
-    </div>
-  </header>
-
-  <main>
-    <section id="boardView" role="tabpanel" aria-label="Notes">
-      <div id="board" class="board"></div>
-      <p id="empty" class="empty" hidden>No notes yet. Press <kbd>N</kbd> or click <strong>+ New note</strong>.</p>
-      <p id="noMatch" class="empty" hidden>No notes match your search.</p>
-    </section>
-
-    <section id="tasksView" role="tabpanel" aria-label="Tasks" hidden>
-      <form id="taskForm" class="task-form" autocomplete="off">
-        <input name="title" type="text" placeholder="Add a task…" aria-label="New task" maxlength="300" required>
-        <input name="due" type="date" aria-label="Due date">
-        <input name="time" type="time" aria-label="Due time (for a reminder)" disabled>
-        <select name="priority" aria-label="Priority">
-          <option value="high">High</option>
-          <option value="medium" selected>Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <button class="primary" type="submit">Add</button>
-      </form>
-      <p class="hint">Give a task a due time and you'll get a reminder when it's due.</p>
-      <div id="taskLists"></div>
-      <p id="noTasks" class="empty" hidden>No tasks yet. Add one above.</p>
-    </section>
-  </main>
-
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<body class="demo">
+  <main id="desk" class="desk" aria-label="Sticky notes"></main>
+  <div id="empty" class="empty" hidden>
+    <p>No notes. Deleted notes are gone for good.</p>
+    <button id="firstNote" class="first-note" type="button">+ New sticky note</button>
+  </div>
+  <footer class="corner">
+    <span><img src="icon.png" alt="" width="18" height="18"> Sticky Notes · browser demo</span>
+    <a class="get-app" href="https://github.com/TheoYanvno/sticky-notes/releases/latest/download/Sticky-Notes-Setup.exe">⬇ Get the Windows app</a>
+  </footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

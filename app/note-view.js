@@ -1,6 +1,6 @@
-// Draws one sticky note. Used by the board and by the pinned always-on-top window.
+// Draws one sticky note. Used by each desktop note window and by the browser demo.
 // User text only ever goes in through .value / .textContent, never as HTML.
-import { COLORS, progress } from '../src/notes.js';
+import { COLORS, MAX_NOTES, isEmpty, progress } from '../src/notes.js';
 
 export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -15,53 +15,73 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
-const COLOR_NAMES = { yellow: 'Yellow', pink: 'Pink', blue: 'Blue', green: 'Green', purple: 'Purple', orange: 'Orange' };
+const COLOR_NAMES = { yellow: 'Yellow', pink: 'Pink', blue: 'Blue', green: 'Green' };
 
 /**
- * actions: { text(id, field, value), color(id, c), addItem(id, text), toggleItem(id, itemId), editItem(id, itemId, text),
- *            removeItem(id, itemId), remove(id), pin(id) }
+ * actions: { color(c), list(on), text(value), addItem(text), toggleItem(itemId), editItem(itemId, text),
+ *            removeItem(itemId), add(), remove() }
+ * options: { canAdd } — whether + may make another note (only three at a time)
  */
-export function renderNote(note, actions, { pinned = false, canPin = true } = {}) {
-  const p = progress(note);
+export function renderNote(note, actions, { canAdd = true } = {}) {
   const key = (part) => `${note.id}:${part}`;
+  const p = progress(note);
+
+  // Deleting a note with something in it takes a second click, so a slip of the mouse loses nothing
+  let confirmTimer = null;
+  const del = el('button', {
+    class: 'icon delete', type: 'button', title: 'Delete note', 'aria-label': 'Delete note',
+    onclick: () => {
+      if (isEmpty(note) || del.classList.contains('confirm')) { clearTimeout(confirmTimer); actions.remove(); return; }
+      del.classList.add('confirm'); del.textContent = 'Delete?'; del.setAttribute('aria-label', 'Click again to delete');
+      confirmTimer = setTimeout(() => { del.classList.remove('confirm'); del.textContent = '🗑'; del.setAttribute('aria-label', 'Delete note'); }, 3000);
+    },
+  }, '🗑');
 
   const bar = el('header', { class: 'note-bar' },
     el('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Note color' },
       ...COLORS.map((c) => el('button', {
         class: `swatch swatch-${c}`, type: 'button', title: COLOR_NAMES[c], role: 'radio',
         'aria-checked': String(c === note.color), 'aria-label': COLOR_NAMES[c],
-        onclick: () => actions.color(note.id, c),
+        onclick: () => actions.color(c),
       }))),
-    p.total ? el('span', { class: 'progress', title: 'Checklist items done' }, p.label) : null,
     el('span', { class: 'spacer' }),
-    !pinned && canPin ? el('button', { class: 'icon', type: 'button', title: 'Pin on top of other windows', 'aria-label': 'Pin on top', onclick: () => actions.pin(note.id) }, '📌') : null,
-    !pinned ? el('button', { class: 'icon danger', type: 'button', title: 'Delete note', 'aria-label': 'Delete note', onclick: () => actions.remove(note.id) }, '🗑') : null,
-    pinned ? el('button', { class: 'icon', type: 'button', title: 'Close (the note stays on the board)', 'aria-label': 'Close', onclick: () => actions.close() }, '✕') : null,
+    p.total ? el('span', { class: 'progress', title: 'Checklist items done' }, p.label) : null,
+    el('button', {
+      class: 'icon', type: 'button', title: note.list ? 'Back to plain text' : 'Make this a checklist',
+      'aria-label': 'Checklist', 'aria-pressed': String(note.list), dataset: { focus: key('list') },
+      onclick: () => actions.list(!note.list),
+    }, '☑'),
+    el('button', {
+      class: 'icon add', type: 'button', disabled: !canAdd, dataset: { focus: key('new') },
+      title: canAdd ? 'New sticky note' : `You can have ${MAX_NOTES} notes at a time. Delete one to make another.`,
+      'aria-label': canAdd ? 'New sticky note' : `New sticky note (limit of ${MAX_NOTES} reached)`,
+      onclick: () => actions.add(),
+    }, '+'),
+    del,
   );
 
-  const title = el('input', {
-    class: 'note-title', type: 'text', value: note.title, placeholder: 'Title', maxLength: 200, 'aria-label': 'Note title',
-    dataset: { focus: key('title') }, oninput: (e) => actions.text(note.id, 'title', e.target.value),
-  });
-  const body = el('textarea', {
-    class: 'note-body', value: note.body, placeholder: 'Write something…', 'aria-label': 'Note text',
-    dataset: { focus: key('body') }, oninput: (e) => actions.text(note.id, 'body', e.target.value),
-  });
+  let content;
+  if (!note.list) {
+    content = el('textarea', {
+      class: 'note-body', value: note.body, placeholder: 'Write something…', 'aria-label': 'Note text',
+      dataset: { focus: key('body') }, oninput: (e) => actions.text(e.target.value),
+    });
+  } else {
+    const list = el('ul', { class: 'checklist' }, ...note.checklist.map((item) => el('li', { class: item.done ? 'done' : '' },
+      el('input', { type: 'checkbox', checked: item.done, 'aria-label': `Done: ${item.text}`, dataset: { focus: key(`check-${item.id}`) }, onchange: () => actions.toggleItem(item.id) }),
+      el('input', { class: 'item-text', type: 'text', value: item.text, maxLength: 500, 'aria-label': 'Checklist item', dataset: { focus: key(`item-${item.id}`) }, oninput: (e) => actions.editItem(item.id, e.target.value) }),
+      el('button', { class: 'icon small', type: 'button', title: 'Remove item', 'aria-label': `Remove ${item.text}`, onclick: () => actions.removeItem(item.id) }, '✕'),
+    )));
+    const addInput = el('input', { type: 'text', placeholder: '+ Add an item', 'aria-label': 'Add a checklist item', dataset: { focus: key('add') }, maxLength: 500 });
+    const add = el('form', {
+      class: 'add-item',
+      onsubmit: (e) => { e.preventDefault(); if (addInput.value.trim()) actions.addItem(addInput.value); },
+    }, addInput);
+    content = el('div', { class: 'list-wrap' }, list, add);
+  }
 
-  const list = el('ul', { class: 'checklist' }, ...note.checklist.map((item) => el('li', { class: item.done ? 'done' : '' },
-    el('input', { type: 'checkbox', checked: item.done, 'aria-label': `Done: ${item.text}`, dataset: { focus: key(`check-${item.id}`) }, onchange: () => actions.toggleItem(note.id, item.id) }),
-    el('input', { class: 'item-text', type: 'text', value: item.text, 'aria-label': 'Checklist item', dataset: { focus: key(`item-${item.id}`) }, oninput: (e) => actions.editItem(note.id, item.id, e.target.value) }),
-    el('button', { class: 'icon small', type: 'button', title: 'Remove item', 'aria-label': `Remove ${item.text}`, onclick: () => actions.removeItem(note.id, item.id) }, '✕'),
-  )));
-
-  const addInput = el('input', { type: 'text', placeholder: '+ Add a checklist item', 'aria-label': 'Add a checklist item', dataset: { focus: key('add') }, maxLength: 500 });
-  const add = el('form', {
-    class: 'add-item',
-    onsubmit: (e) => { e.preventDefault(); if (addInput.value.trim()) actions.addItem(note.id, addInput.value); },
-  }, addInput);
-
-  return el('article', { class: `note note-${note.color}${pinned ? ' pinned' : ''}${note.checklist.length ? ' has-list' : ''}`, dataset: { id: note.id }, 'aria-label': note.title || 'Note' },
-    bar, el('div', { class: 'note-content' }, title, body, list, add));
+  return el('article', { class: `note note-${note.color}`, dataset: { id: note.id }, 'aria-label': 'Sticky note' },
+    bar, el('div', { class: 'note-content' }, content));
 }
 
 /** Re-rendering replaces elements; put the cursor back where it was. */
@@ -75,4 +95,18 @@ export function keepFocus(rerender) {
   if (!again) return;
   again.focus({ preventScroll: true });
   if (sel && again.setSelectionRange && again.type !== 'checkbox') { try { again.setSelectionRange(...sel); } catch { /* not a text field */ } }
+}
+
+/** Applies a change to a note; shared by the desktop window and the browser demo. */
+export function noteActions(N, change, { add, remove }) {
+  return {
+    color: (color) => change((n) => N.updateNote(n, { color })),
+    list: (on) => change((n) => N.setList(n, on), true, on ? 'add' : 'body'),
+    text: (body) => change((n) => N.updateNote(n, { body }), false),
+    addItem: (text) => change((n) => N.addItem(n, text), true, 'add'),
+    toggleItem: (itemId) => change((n) => N.toggleItem(n, itemId)),
+    editItem: (itemId, text) => change((n) => N.editItem(n, itemId, text), false),
+    removeItem: (itemId) => change((n) => N.removeItem(n, itemId)),
+    add, remove,
+  };
 }

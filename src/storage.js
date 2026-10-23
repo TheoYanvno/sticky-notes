@@ -1,86 +1,60 @@
-// Saved data: one JSON document with every note and task. Shared by the Electron main process (file on disk)
+// Saved data: one small JSON document with the notes. Shared by the Electron main process (a file on disk)
 // and the browser demo (localStorage), so nothing here touches the DOM or Electron.
-import { COLORS } from './notes.js';
-import { PRIORITIES } from './tasks.js';
+import { COLORS, MAX_NOTES, SIZE } from './notes.js';
 
-export const VERSION = 1;
-export const emptyData = () => ({ app: 'sticky-notes', version: VERSION, notes: [], tasks: [] });
+export const VERSION = 2;
+export const emptyData = () => ({ app: 'sticky-notes', version: VERSION, notes: [] });
 
 const text = (v, max = 20000) => (typeof v === 'string' ? v.slice(0, max) : '');
-const num = (v, fallback, min = -1e6, max = 1e6) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback);
+const num = (v, fallback, min, max) => (Number.isFinite(v) ? Math.round(Math.min(max, Math.max(min, v))) : fallback);
 const time = (v) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : null);
 const id = (v) => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null);
+
+// Version 1 had six colors; the two that were dropped become the nearest of the four that are left
+const OLD_COLORS = { purple: 'blue', orange: 'yellow' };
 
 function cleanNote(n) {
   if (!n || typeof n !== 'object' || !id(n.id)) return null;
   const now = new Date().toISOString();
+  const checklist = Array.isArray(n.checklist)
+    ? n.checklist.filter((i) => i && id(i.id)).slice(0, 500).map((i) => ({ id: i.id, text: text(i.text, 500), done: i.done === true }))
+    : [];
+  // Version 1 notes had a title; it becomes the first line so nothing is lost
+  const body = [text(n.title, 200).trim(), text(n.body)].filter(Boolean).join('\n');
+  const color = COLORS.includes(n.color) ? n.color : OLD_COLORS[n.color] ?? COLORS[0];
   return {
     id: n.id,
-    title: text(n.title, 200),
-    body: text(n.body),
-    checklist: Array.isArray(n.checklist)
-      ? n.checklist.filter((i) => i && id(i.id)).slice(0, 500).map((i) => ({ id: i.id, text: text(i.text, 500), done: i.done === true }))
-      : [],
-    color: COLORS.includes(n.color) ? n.color : COLORS[0],
-    x: num(n.x, 40, 0, 20000), y: num(n.y, 40, 0, 20000),
-    w: num(n.w, 240, 160, 1200), h: num(n.h, 220, 120, 1200),
+    body,
+    list: typeof n.list === 'boolean' ? n.list : checklist.length > 0 && !body.trim(),
+    checklist,
+    color,
+    // Windows can sit on a screen to the left of or above the main one, so positions may be negative
+    x: num(n.x, 40, -20000, 20000), y: num(n.y, 40, -20000, 20000),
+    w: num(n.w, SIZE.w, SIZE.minW, 1200), h: num(n.h, SIZE.h, SIZE.minH, 1200),
     created: time(n.created) ?? now,
     updated: time(n.updated) ?? now,
   };
 }
 
-function cleanTask(t) {
-  if (!t || typeof t !== 'object' || !id(t.id) || !text(t.title, 300).trim()) return null;
-  const now = new Date().toISOString();
-  return {
-    id: t.id,
-    title: text(t.title, 300),
-    due: typeof t.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.due) ? t.due : null,
-    dueTime: typeof t.dueTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t.dueTime) ? t.dueTime : null,
-    priority: PRIORITIES.includes(t.priority) ? t.priority : 'medium',
-    done: t.done === true,
-    notified: t.notified === true,
-    created: time(t.created) ?? now,
-    updated: time(t.updated) ?? now,
-  };
-}
-
-/** Turns anything (a saved file, an import, an old version) into valid data, dropping what can't be repaired. */
+/**
+ * Turns anything (a saved file, an older version, a damaged edit) into valid data, dropping what can't be
+ * repaired. Only three notes are allowed; if an older file has more, the three edited most recently stay.
+ */
 export function normalize(raw) {
   const data = emptyData();
   if (!raw || typeof raw !== 'object') return data;
   const seen = new Set();
   const unique = (x) => x && !seen.has(x.id) && seen.add(x.id);
-  data.notes = (Array.isArray(raw.notes) ? raw.notes : []).map(cleanNote).filter(unique);
-  data.tasks = (Array.isArray(raw.tasks) ? raw.tasks : []).map(cleanTask).filter(unique);
+  let notes = (Array.isArray(raw.notes) ? raw.notes : []).map(cleanNote).filter(unique);
+  if (notes.length > MAX_NOTES) {
+    const keep = new Set([...notes].sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)).slice(0, MAX_NOTES).map((n) => n.id));
+    notes = notes.filter((n) => keep.has(n.id));
+  }
+  data.notes = notes;
   return data;
 }
 
 export const serialize = (data) => JSON.stringify(normalize(data), null, 2);
-
-/** Reads an export file's text. Throws a readable error when it isn't one. */
-export function parseImport(textContent) {
-  let raw;
-  try { raw = JSON.parse(textContent); } catch { throw new Error('That file is not valid JSON.'); }
-  if (!raw || raw.app !== 'sticky-notes' || !Array.isArray(raw.notes) || !Array.isArray(raw.tasks)) {
-    throw new Error('That file is not a Sticky Notes export.');
-  }
-  return normalize(raw);
-}
-
-/** Adds imported notes and tasks to the current ones. Same id on both sides: the most recently updated copy wins. */
-export function mergeImport(current, incoming) {
-  const merge = (a, b) => {
-    const byId = new Map(a.map((x) => [x.id, x]));
-    for (const x of b) {
-      const mine = byId.get(x.id);
-      if (!mine || Date.parse(x.updated) > Date.parse(mine.updated)) byId.set(x.id, x);
-    }
-    return [...byId.values()];
-  };
-  const cur = normalize(current); const inc = normalize(incoming);
-  return { ...cur, notes: merge(cur.notes, inc.notes), tasks: merge(cur.tasks, inc.tasks) };
-}
 
 /**
  * Saves without ever leaving a half-written file: write a temporary file, then rename it over the old one
