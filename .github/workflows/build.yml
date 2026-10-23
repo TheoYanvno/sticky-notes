@@ -20,8 +20,20 @@ jobs:
           node-version: 22
       - run: npm test
 
-  windows:
+  # The real desktop app, started under a virtual screen and clicked through (test/smoke/electron-smoke.mjs)
+  smoke:
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: xvfb-run -a npx electron --no-sandbox test/smoke/electron-smoke.mjs
+
+  windows:
+    needs: [test, smoke]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
